@@ -4,11 +4,14 @@ import org.apache.http.client.HttpClient;
 import org.apache.http.conn.ssl.NoopHostnameVerifier;
 import org.apache.http.conn.ssl.SSLConnectionSocketFactory;
 import org.apache.http.impl.client.HttpClients;
+import org.apache.http.ssl.PrivateKeyDetails;
+import org.apache.http.ssl.PrivateKeyStrategy;
 import org.apache.http.ssl.SSLContexts;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.client.ClientHttpRequestFactory;
@@ -22,6 +25,8 @@ import springfox.documentation.spring.web.plugins.Docket;
 import springfox.documentation.swagger2.annotations.EnableSwagger2;
 
 import javax.net.ssl.SSLContext;
+import java.net.Socket;
+import java.util.Map;
 
 @SpringBootApplication
 @EnableSwagger2
@@ -64,6 +69,7 @@ public class ClientApplication {
         return restTemplate;
     }
 
+
     private ClientHttpRequestFactory clientHttpRequestFactory() throws Exception {
         return new HttpComponentsClientHttpRequestFactory(httpClient());
     }
@@ -72,8 +78,11 @@ public class ClientApplication {
         // Load our keystore and truststore containing certificates that we trust.
         SSLContext sslcontext =
                 SSLContexts.custom().loadTrustMaterial(trustStore.getFile(), trustStorePassword.toCharArray())
-                        .loadKeyMaterial(keyStore.getFile(), keyStorePassword.toCharArray(),
-                                keyPassword.toCharArray()).build();
+//                        .loadKeyMaterial(keyStore.getFile(), keyStorePassword.toCharArray(),
+//                                keyPassword.toCharArray()).build();
+                        //以上是原版，这里是使用了自签证书来通讯的 这个是mycert.p12签发的，所以server中trustStore load了mycert.p12
+                        .loadKeyMaterial(new ClassPathResource("tobesigned.jks").getFile(), "123456".toCharArray(),
+                                "123456".toCharArray()).build();
         SSLConnectionSocketFactory sslConnectionSocketFactory =
                 new SSLConnectionSocketFactory(sslcontext, new NoopHostnameVerifier());
         return HttpClients.custom().setSSLSocketFactory(sslConnectionSocketFactory).build();

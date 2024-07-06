@@ -9,10 +9,12 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.client.ClientHttpRequestFactory;
 import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.DefaultResponseErrorHandler;
 import org.springframework.web.client.RestTemplate;
 import springfox.documentation.builders.PathSelectors;
@@ -21,7 +23,11 @@ import springfox.documentation.spi.DocumentationType;
 import springfox.documentation.spring.web.plugins.Docket;
 import springfox.documentation.swagger2.annotations.EnableSwagger2;
 
-import javax.net.ssl.SSLContext;
+import javax.net.ssl.*;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.net.HttpURLConnection;
+import java.security.KeyStore;
 
 @SpringBootApplication
 @EnableSwagger2
@@ -62,6 +68,57 @@ public class ServerApplication {
                 });
 
         return restTemplate;
+    }
+
+    @Bean
+    public RestTemplate restTemplate2() throws Exception {
+        RestTemplate restTemplate = new RestTemplate(clientHttpRequestFactory2());
+        restTemplate.setErrorHandler(
+                new DefaultResponseErrorHandler() {
+                    @Override
+                    protected boolean hasError(HttpStatus statusCode) {
+                        return false;
+                    }
+                });
+
+        return restTemplate;
+    }
+
+        private ClientHttpRequestFactory clientHttpRequestFactory2() throws Exception {
+
+        KeyStore clientKeyStore = KeyStore.getInstance("PKCS12");
+        clientKeyStore.load(new ClassPathResource("ca.p12").getInputStream(), "123456".toCharArray());
+
+//        KeyStore trustStore = KeyStore.getInstance("JKS");
+        KeyStore trustStore = KeyStore.getInstance("PKCS12");
+        trustStore.load(new ClassPathResource("ca.p12").getInputStream(), "123456".toCharArray());
+
+        KeyManagerFactory kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
+        kmf.init(clientKeyStore, "123456".toCharArray());
+
+        TrustManagerFactory tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+        tmf.init(trustStore);
+
+        SSLContext sslContext = SSLContext.getInstance("TLSv1.2");
+        sslContext.init(kmf.getKeyManagers(), tmf.getTrustManagers(), null);
+
+        SSLParameters sslParams = sslContext.getDefaultSSLParameters();
+        // You can customize SSL parameters here if needed
+
+        return new SimpleClientHttpRequestFactory() {
+            @Override
+            protected void prepareConnection(HttpURLConnection connection, String httpMethod) {
+                try {
+                    super.prepareConnection(connection, httpMethod);
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+                if (connection instanceof HttpsURLConnection) {
+                    ((HttpsURLConnection) connection).setSSLSocketFactory(sslContext.getSocketFactory());
+                }
+            }
+        };
+
     }
 
     private ClientHttpRequestFactory clientHttpRequestFactory() throws Exception {
